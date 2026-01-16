@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <img src="../icons/icon-48.png" alt="OTT Speed" width="32" height="32">
+        <h1>OTT Speed</h1>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span class="status-text">감지 중...</span>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <div class="speed-display">
+        <span class="speed-value" id="speed-value">1.0</span>
+        <span class="speed-unit">x</span>
+      </div>
+
+      <div class="slider-container">
+        <input type="range" id="speed-slider" min="0.25" max="4" step="0.25" value="1">
+        <div class="slider-labels">
+          <span>0.25x</span>
+          <span>4.0x</span>
+        </div>
+      </div>
+
+      <div class="presets">
+        <button class="preset-btn" data-speed="0.5">0.5x</button>
+        <button class="preset-btn" data-speed="0.75">0.75x</button>
+        <button class="preset-btn active" data-speed="1">1.0x</button>
+        <button class="preset-btn" data-speed="1.5">1.5x</button>
+        <button class="preset-btn" data-speed="2">2.0x</button>
+      </div>
+    </main>
+
+    <div class="no-video" id="no-video" style="display: none;">
+      <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
+        <line x1="2" y1="2" x2="22" y2="22" stroke-linecap="round"/>
+      </svg>
+      <p>비디오를 찾을 수 없습니다</p>
+      <span class="hint">비디오가 있는 페이지에서 사용하세요</span>
+    </div>
+
+    <footer>
+      <button class="reset-btn" id="reset-btn" title="기본 속도로 재설정">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        리셋
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
