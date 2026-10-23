@@ -77,8 +77,25 @@ const silentWav = makeSilentWav();
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
   if (pathname === '/synthetic.wav') {
-    response.writeHead(200, { 'content-type': 'audio/wav', 'content-length': silentWav.length });
-    response.end(silentWav);
+    const headers = { 'content-type': 'audio/wav', 'accept-ranges': 'bytes' };
+    let start = 0;
+    let end = silentWav.length - 1;
+    const range = request.headers.range;
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match || (!match[1] && !match[2])) {
+        response.writeHead(416, { ...headers, 'content-range': `bytes */${silentWav.length}` }); response.end(); return;
+      }
+      start = match[1] ? Number(match[1]) : Math.max(0, silentWav.length - Number(match[2]));
+      end = match[1] && match[2] ? Math.min(Number(match[2]), end) : end;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= silentWav.length) {
+        response.writeHead(416, { ...headers, 'content-range': `bytes */${silentWav.length}` }); response.end(); return;
+      }
+      headers['content-range'] = `bytes ${start}-${end}/${silentWav.length}`;
+    }
+    headers['content-length'] = end - start + 1;
+    response.writeHead(range ? 206 : 200, headers);
+    response.end(request.method === 'HEAD' ? undefined : silentWav.subarray(start, end + 1));
     return;
   }
   if (pathname === '/favicon.ico') { response.writeHead(204); response.end(); return; }
@@ -146,7 +163,10 @@ try {
   const tabId = await worker.evaluate(async url => (await chrome.tabs.create({ url })).id, `${origin}/episode-one`);
   const page = await opened;
   await page.waitForURL(`${origin}/episode-one`);
-  await page.waitForFunction(() => document.querySelector('video').readyState >= 1);
+  await page.waitForFunction(() => {
+    const video = document.querySelector('video');
+    return video.readyState >= 2 && video.seekable.length > 0 && video.seekable.end(video.seekable.length - 1) >= 5;
+  });
   assert.ok(Number.isInteger(tabId), 'synthetic fixture has an extension-visible tab');
   const send = message => worker.evaluate(({ tabId, message }) => chrome.tabs.sendMessage(tabId, message), { tabId, message });
   const state = () => send({ action: 'subtitleState' });
@@ -343,12 +363,16 @@ try {
       fullscreen: document.fullscreenElement?.tagName,
       video: [...document.querySelectorAll('video')].map(video => ({
         readyState: video.readyState, currentTime: video.currentTime, paused: video.paused,
-        playbackRate: video.playbackRate, error: video.error?.message
+        playbackRate: video.playbackRate, error: video.error?.message, duration: video.duration,
+        currentSrc: video.currentSrc, networkState: video.networkState,
+        seekable: Array.from({ length: video.seekable.length }, (_, index) => [video.seekable.start(index), video.seekable.end(index)]),
+        buffered: Array.from({ length: video.buffered.length }, (_, index) => [video.buffered.start(index), video.buffered.end(index)])
       }))
     })).catch(() => ({ url: inspected.url() }));
     pages.push(detail);
     await inspected.screenshot({ path: join(diagnostics, `failure-page-${index}.png`), fullPage: true }).catch(() => {});
   }
+  console.error('Browser failure diagnostics:', JSON.stringify({ check: currentCheck, pageErrors: errors, pages }));
   await writeFile(join(diagnostics, 'failure.json'), JSON.stringify({ check: currentCheck, passed, error: error.stack || String(error), pageErrors: errors, pages }, null, 2));
 } finally {
   if (context && tracing) await context.tracing.stop(process.exitCode ? { path: join(diagnostics, 'trace.zip') } : {}).catch(() => {});
