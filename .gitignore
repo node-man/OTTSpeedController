@@ -18,3 +18,11 @@ desktop.ini
 # Temporary files
 *.tmp
 *.temp
+
+# Local development and private subtitle data
+node_modules/
+dist/
+test-results/
+playwright-report/
+private-subtitles/
+*.smi

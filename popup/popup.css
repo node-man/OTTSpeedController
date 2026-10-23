@@ -8,7 +8,7 @@ body {
   font-family: 'Pretendard', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   background: linear-gradient(145deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
   color: #e8e8e8;
-  min-width: 280px;
+  min-width: 340px;
   overflow: hidden;
 }
 
@@ -258,3 +258,13 @@ footer {
   opacity: 0.5;
   pointer-events: none;
 }
+
+.workspace-btn {
+  display: flex; width: 100%; align-items: center; justify-content: space-between;
+  padding: 13px 16px; margin: 8px 0; border: 0; border-radius: 10px;
+  background: #4ecca3; color: #10271f; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.workspace-btn:disabled { opacity: .45; cursor: default; }
+.workspace-hint { text-align: center; color: #a7b1bb; font-size: 11px; margin: 8px 0 16px; }
+#error { color: #ffb9a7; font-size: 12px; line-height: 1.5; margin: 8px 0; }
+button:focus-visible, input:focus-visible { outline: 2px solid #b4ffe4; outline-offset: 3px; }

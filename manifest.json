@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OTT Speed Controller",
-  "description": "OTT 서비스 비디오 재생속도를 자유롭게 조절하세요",
-  "version": "1.0.0",
+  "name": "OTTSpeed — 배속·자막·번역",
+  "description": "OTT 재생 속도 조절, 로컬 자막 표시와 A/B 비교, 문맥 번역 파일 교환",
+  "version": "1.1.0",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -16,7 +16,7 @@
       "32": "icons/icon-32.png",
       "48": "icons/icon-48.png"
     },
-    "default_title": "OTT Speed Controller"
+    "default_title": "OTTSpeed · 배속·자막·번역"
   },
   "permissions": [
     "activeTab",
@@ -29,7 +29,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["scripts/content.js"],
+      "js": ["subtitles/core.js", "subtitles/controller.js", "scripts/content.js"],
       "run_at": "document_end"
     }
   ]

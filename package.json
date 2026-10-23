@@ -1,0 +1,13 @@
+{
+  "name": "ottspeed-controller",
+  "version": "1.1.0",
+  "private": true,
+  "description": "OTTSpeed playback controls and local subtitle translation workspace",
+  "scripts": {
+    "test": "node tests/subtitle-core.test.js && node tests/browser-harness/controller.test.mjs && node tests/browser-harness/content.test.mjs && node tests/browser-harness/popup-background.test.mjs && node tests/browser-harness/workspace.test.mjs",
+    "test:browser": "node tests/smoke.mjs",
+    "check": "node scripts/check.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
