@@ -12,6 +12,8 @@
 npm run runtime:install
 ```
 
+기존 도우미가 있으면 저장된 허용 확장 ID를 재사용한다. 새 설치나 다른 Chrome 프로필에서 개발용 확장을 처음 로드했다면 `npm run runtime:install -- -ExtensionId CHROME에_표시된_32자_ID`로 해당 설치의 ID를 지정한다. 브리지 기동도 같은 개인 설정의 ID를 사용한다.
+
 이후 확장을 새로고침하면 팝업을 열 때와 **번역 시작** 전에 로컬 연결을 자동 준비한다. 영상이 없는 탭에서도 팝업의 **번역 연결 시작**을 사용할 수 있다. 라이브러리를 열거나 작업실에서 **브리지 연결**을 눌러도 같은 경로를 이용한다. Chrome 시작 이벤트도 연결을 준비하므로 Windows 로그인 자동 실행 트리거 없이 브라우저 사용 시 시작할 수 있다. 팝업의 준비 표시는 로컬 브리지·터널·감독 프로세스 상태이며 ChatGPT의 실제 호출 성공·번역 완료 표시는 아니다.
 
 Chrome의 공식 [Native Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)으로 설치된 `com.ottspeed.runtime`만 호출한다. 설치기는 Windows 기본 C# 컴파일러로 도우미를 만들고 HKCU에 등록하며 기본 허용 출처는 OTTSpeed 확장 한 개뿐이다. `nativeMessaging` 권한이 필요하다. 도우미는 고정된 `ensure`·`status`만 받는다. 임의 명령·경로·환경변수·자막·키를 인수로 받거나 반환하지 않는다. 웹페이지·콘텐츠 스크립트가 시작 요청을 전달하지 못하도록 백그라운드에서도 관리 페이지 URL을 제한한다.

@@ -1,5 +1,23 @@
 # Read account-specific connection IDs from private local configuration.
 # This helper never reads/decrypts a runtime key or starts a process.
+function Get-OTTDeckExtensionId {
+  param([Parameter(Mandatory=$true)][string]$ProjectDirectory,[string]$ExtensionId)
+  if (-not $ExtensionId) {
+    $nativeConfiguration = Join-Path $ProjectDirectory 'private-subtitles/bridge/native-host/runtime-host-config.json'
+    if (Test-Path -LiteralPath $nativeConfiguration) {
+      $saved = Get-Content -LiteralPath $nativeConfiguration -Raw | ConvertFrom-Json
+      if ($saved.allowedOrigin -notmatch '^chrome-extension://([a-p]{32})/$') { throw 'Invalid saved extension origin.' }
+      $ExtensionId = $Matches[1]
+    }
+  }
+  if (-not $ExtensionId) { $ExtensionId = $env:OTTDECK_EXTENSION_ID }
+  if (-not $ExtensionId) { $ExtensionId = $env:OTTSPEED_EXTENSION_ID }
+  # Existing pre-native installations retain their previous default identity.
+  if (-not $ExtensionId) { $ExtensionId = 'hegbpfhcjpghhhnmnjjedibpfblchefh' }
+  if ($ExtensionId -notmatch '^[a-p]{32}$') { throw 'A valid Chrome extension ID is required.' }
+  return $ExtensionId
+}
+
 function Get-OTTDeckRuntimeConfiguration {
   param([Parameter(Mandatory=$true)][string]$ProjectDirectory,[string]$TunnelId,[string]$OrganizationId)
   $profilePath = Join-Path $ProjectDirectory 'private-subtitles/bridge/tunnel-profiles/ottspeed.yaml'

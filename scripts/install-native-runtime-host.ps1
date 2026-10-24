@@ -1,8 +1,8 @@
-param([string]$ExtensionId = 'hegbpfhcjpghhhnmnjjedibpfblchefh')
+param([string]$ExtensionId)
 $ErrorActionPreference = 'Stop'
-if ($ExtensionId -notmatch '^[a-p]{32}$') { throw 'A Chrome extension ID is required.' }
 $projectDirectory = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'runtime/config.ps1')
+$ExtensionId = Get-OTTDeckExtensionId -ProjectDirectory $projectDirectory -ExtensionId $ExtensionId
 $runtimeConfiguration = Get-OTTDeckRuntimeConfiguration -ProjectDirectory $projectDirectory
 $hostDirectory = Join-Path $projectDirectory 'private-subtitles/bridge/native-host'
 New-Item -ItemType Directory -Path $hostDirectory -Force | Out-Null

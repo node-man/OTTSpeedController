@@ -1,6 +1,8 @@
-param([string]$ExtensionId = 'hegbpfhcjpghhhnmnjjedibpfblchefh')
+param([string]$ExtensionId)
 $ErrorActionPreference = 'Stop'
 $projectDirectory = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'runtime/config.ps1')
+$ExtensionId = Get-OTTDeckExtensionId -ProjectDirectory $projectDirectory -ExtensionId $ExtensionId
 $dataDirectory = Join-Path $projectDirectory 'private-subtitles/bridge'
 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
 try {

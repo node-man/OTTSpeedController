@@ -4,6 +4,11 @@ $projectDirectory = Split-Path -Parent $PSScriptRoot
 $fixtureDirectory = Join-Path $projectDirectory ('test-results/native-host-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
 . (Join-Path $projectDirectory 'scripts/runtime/config.ps1')
+$nativeDirectory = Join-Path $fixtureDirectory 'private-subtitles/bridge/native-host'
+New-Item -ItemType Directory -Path $nativeDirectory -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $nativeDirectory 'runtime-host-config.json'),'{"allowedOrigin":"chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/"}')
+if ((Get-OTTDeckExtensionId -ProjectDirectory $fixtureDirectory) -ne 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { throw 'Installed extension identity not preserved.' }
+if ((Get-OTTDeckExtensionId -ProjectDirectory $fixtureDirectory -ExtensionId 'cccccccccccccccccccccccccccccccc') -ne 'cccccccccccccccccccccccccccccccc') { throw 'Explicit extension identity not used.' }
 $profileDirectory = Join-Path $fixtureDirectory 'private-subtitles/bridge/tunnel-profiles'
 New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
 $profilePath = Join-Path $profileDirectory 'ottspeed.yaml'
