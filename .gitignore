@@ -18,3 +18,15 @@ desktop.ini
 # Temporary files
 *.tmp
 *.temp
+
+# Local development and private subtitle data
+node_modules/
+dist/
+test-results/
+playwright-report/
+private-subtitles/
+WestWing_Subtitles_Prepared.zip
+*.smi
+
+# Personal handoff reports contain local account/runtime details
+/*-ChatGPT-작업보고서-*.md

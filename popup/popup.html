@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <title>OTTDeck</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -9,7 +10,7 @@
     <header>
       <div class="logo">
         <img src="../icons/icon-48.png" alt="OTT Speed" width="32" height="32">
-        <h1>OTT Speed</h1>
+        <h1>OTTDeck</h1>
       </div>
       <div class="status" id="status">
         <span class="status-dot"></span>
@@ -24,7 +25,7 @@
       </div>
 
       <div class="slider-container">
-        <input type="range" id="speed-slider" min="0.25" max="4" step="0.25" value="1">
+        <input type="range" id="speed-slider" aria-label="재생 속도" min="0.25" max="4" step="0.25" value="1">
         <div class="slider-labels">
           <span>0.25x</span>
           <span>4.0x</span>
@@ -46,20 +47,40 @@
         <line x1="2" y1="2" x2="22" y2="22" stroke-linecap="round"/>
       </svg>
       <p>비디오를 찾을 수 없습니다</p>
-      <span class="hint">비디오가 있는 페이지에서 사용하세요</span>
+      <span class="hint">영상 페이지를 새로고침한 후 다시 열어주세요.</span>
     </div>
 
+    <section class="translation-controls" aria-label="자막 번역">
+      <button class="workspace-btn secondary" id="runtime-connect-btn">번역 연결 시작 <span>⏻</span></button>
+      <p id="runtime-status" role="status">로컬 번역 연결 확인 중…</p>
+      <button class="workspace-btn" id="translate-btn">번역 시작 <span>⧉</span></button>
+      <p class="workspace-hint">자동 연결이 설정되면 바로 번역을 요청하고, 그전에는 프롬프트를 복사합니다.</p>
+      <p id="copy-status" role="status"></p>
+      <textarea id="copy-prompt" aria-label="복사하지 못한 번역 프롬프트" readonly hidden></textarea>
+      <p id="translation-status" role="status">첫 구간이 번역되면 처음부터 재생할 수 있습니다.</p>
+      <p id="execution-status" role="status"></p>
+      <button class="workspace-btn" id="play-translated-btn" disabled>처음부터 B로 재생 <span>▶</span></button>
+    </section>
+    <button class="workspace-btn secondary" id="library-btn">자막 라이브러리 <span>↗</span></button>
+    <button class="workspace-btn secondary" id="workspace-btn">자막·번역 작업실 열기 <span>↗</span></button>
+    <p class="workspace-hint">자막 불러오기 · A/B 비교 · 번역 파일 교환</p>
+    <p id="error" role="status"></p>
     <footer>
       <button class="reset-btn" id="reset-btn" title="기본 속도로 재설정">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/>
           <path d="M3 3v5h5"/>
         </svg>
-        리셋
+        1×로 재설정
       </button>
     </footer>
   </div>
+  <script src="../shared/product.js"></script>
+  <script src="../modules/runtime/bridge-http.js"></script>
 
+  <script src="../subtitles/core.js"></script>
+  <script src="../subtitles/translation-prompt.js"></script>
+  <script src="../subtitles/bridge-client.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
