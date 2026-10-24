@@ -35,9 +35,16 @@ function Invoke-HostFixture([string]$Action,[string]$OriginValue=$origin,[switch
   $start.UseShellExecute=$false
   $start.CreateNoWindow=$true
   $start.RedirectStandardInput=$true
+  # Process defaults may emit a UTF-8 BOM before a binary native frame in CI.
   $start.RedirectStandardOutput=$true
   $start.RedirectStandardError=$true
-  $process=[Diagnostics.Process]::Start($start)
+  # Windows PowerShell/.NET Framework lacks StandardInputEncoding. Start the
+  # redirected writer with a no-preamble console encoding, then restore it.
+  $launchEncoding=[Console]::InputEncoding
+  try {
+    [Console]::InputEncoding=[Text.UTF8Encoding]::new($false)
+    $process=[Diagnostics.Process]::Start($start)
+  } finally { [Console]::InputEncoding=$launchEncoding }
   try {
     $request=@{action=$Action}
     if ($Extra) { $request.command='forbidden' }
@@ -58,9 +65,14 @@ function Invoke-HostFixture([string]$Action,[string]$OriginValue=$origin,[switch
     return $result
   } finally { $process.Dispose() }
 }
-$statusResponse = Invoke-HostFixture 'status'
-if ($statusResponse.state -ne 'stopped') { throw ('Unexpected stopped-runtime response: ' + ($statusResponse | ConvertTo-Json -Compress)) }
-if ((Invoke-HostFixture 'stop').errorCode -ne 'invalid_request') { throw 'Unknown action was accepted.' }
-if ((Invoke-HostFixture 'ensure' -Extra).errorCode -ne 'invalid_request') { throw 'Arbitrary command was accepted.' }
-if ((Invoke-HostFixture 'status' -OriginValue 'chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/').errorCode -ne 'forbidden_origin') { throw 'Different extension was accepted.' }
+$previousEncoding=[Console]::InputEncoding
+try {
+  # Exercise the BOM-bearing console default even on non-UTF-8 developer PCs.
+  [Console]::InputEncoding=[Text.Encoding]::UTF8
+  $statusResponse = Invoke-HostFixture 'status'
+  if ($statusResponse.state -ne 'stopped') { throw ('Unexpected stopped-runtime response: ' + ($statusResponse | ConvertTo-Json -Compress)) }
+  if ((Invoke-HostFixture 'stop').errorCode -ne 'invalid_request') { throw 'Unknown action was accepted.' }
+  if ((Invoke-HostFixture 'ensure' -Extra).errorCode -ne 'invalid_request') { throw 'Arbitrary command was accepted.' }
+  if ((Invoke-HostFixture 'status' -OriginValue 'chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/').errorCode -ne 'forbidden_origin') { throw 'Different extension was accepted.' }
+} finally { [Console]::InputEncoding=$previousEncoding }
 Write-Output 'PASS Windows runtime profile resolution, native compile/framing and command/origin restrictions.'
