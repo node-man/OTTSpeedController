@@ -64,9 +64,12 @@
     return false;
   }
 
-  function cueText(cues) {
+  function cueText(cues, legacyNetflixClasses = false) {
     // The same subtitle may be split into overlapping styled WebVTT regions.
-    return [...new Set(cues.map(cue => cue.text).filter(Boolean))].join('\n');
+    // Older immutable Netflix snapshots retain nonstandard </c.class> closers.
+    // Clean only their source display; never rewrite request text or decode it twice.
+    const text = cue => legacyNetflixClasses ? cue.text.replace(/<\/c(?:\.[\w-]+)+\s*>/gi, '') : cue.text;
+    return [...new Set(cues.map(text).filter(Boolean))].join('\n');
   }
 
   class OTTSubtitleController {
@@ -219,6 +222,11 @@
         targetText: this._targetText,
         settings: { ...this._settings },
         trackCounts: Object.fromEntries(Object.entries(this._tracks).map(([key, track]) => [key, track?.cues.length || 0])),
+        translation: this._tracks.b?.requestId && /^chatgpt-(?:mcp(?:-partial)?|plan)$/.test(this._tracks.b.provenance) ? {
+          requestId:this._tracks.b.requestId,partial:this._tracks.b.partial === true,
+          readyCueCount:this._tracks.b.cues.length,totalCueCount:this._tracks.b.totalCueCount || this._tracks.b.cues.length,
+          readyThroughMs:this._tracks.b.readyThroughMs || Math.max(...this._tracks.b.cues.map(c=>c.endMs))
+        } : null,
         nativeCaptionsHidden: Boolean(this._nativeStyle?.isConnected),
         warning: this._warning,
         warningCode: this._warningCode,
@@ -433,10 +441,12 @@
         return cueText(this._core.activeCues(this._indexes[key], milliseconds, {
           offsetMs: this._settings.offsetMs + sync.offsetMs,
           scale: this._settings.scale * sync.scale
-        }));
+        }), key === 'source' && this._media?.platform === 'netflix' && this._tracks[key].capture?.format === 'vtt');
       };
-      const source = this._settings.display !== 'target' ? activeText('source') : '';
       const target = this._settings.display !== 'source' ? activeText(this._settings.activeTarget) : '';
+      const awaitingTranslation = this._settings.activeTarget === 'b' && this._tracks.b?.partial && this._tracks.b.cues.length < this._tracks.b.totalCueCount && milliseconds >= this._tracks.b.readyThroughMs;
+      const source = this._settings.display !== 'target' || awaitingTranslation ? activeText('source') : '';
+      if(awaitingTranslation) {this._warningCode='TRANSLATION_PENDING';this._warning='다음 구간 번역 중입니다. 준비된 구간 뒤에서는 영어 원문을 표시합니다.';}
       this._sourceText = source;
       this._targetText = target;
       this._currentText = [target, source].filter(Boolean).join('\n');

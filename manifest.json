@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OTTSpeed — 배속·자막·번역",
-  "description": "OTT 재생 속도 조절, 로컬 자막 표시와 A/B 비교, 문맥 번역 파일 교환",
-  "version": "1.1.0",
+  "name": "OTTDeck — 자막·번역·시청 도구",
+  "description": "OTT 재생 설정, 자막 수집·번역과 작품별 라이브러리를 한곳에서 관리합니다.",
+  "version": "1.2.0",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -16,20 +16,56 @@
       "32": "icons/icon-32.png",
       "48": "icons/icon-48.png"
     },
-    "default_title": "OTTSpeed · 배속·자막·번역"
+    "default_title": "OTTDeck · 자막·번역·시청 도구"
   },
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "alarms",
+    "clipboardWrite",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["subtitles/core.js", "subtitles/controller.js", "scripts/content.js"],
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "subtitles/core.js",
+        "subtitles/netflix.js",
+        "subtitles/netflix-main.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "subtitles/core.js",
+        "subtitles/netflix.js",
+        "subtitles/capture-validation.js",
+        "subtitles/netflix-capture.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "subtitles/core.js",
+        "subtitles/controller.js",
+        "scripts/content.js"
+      ],
       "run_at": "document_end"
     }
   ]

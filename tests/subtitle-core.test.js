@@ -39,6 +39,35 @@ test('generated IDs cannot collide with explicit VTT IDs', () => {
   assert.deepEqual(result.cues.map(item => item.id), ['cue-00001-1', 'cue-00001']);
 });
 
+test('progress validates only a nonempty contiguous prefix and never passes the complete-response contract',async()=>{
+  const request=await core.makeTranslationRequest({media,source:{cues:[cue('first',1000,2000),cue('next',3000,4000)]}});
+  const progress={...request.outputTemplate,kind:'ottspeed.translation-progress',revision:1,cues:[{id:'first',text:'합성 앞부분.'}]};
+  const validated=core.validateTranslationProgress(progress,request);
+  assert.equal(validated.readyThroughMs,3000);assert.equal(validated.cues[0].startMs,1000);
+  expectCode(()=>core.validateTranslationResponse(progress,request),'INVALID_RESPONSE');
+  for(const bad of [
+    {...progress,cues:[]},{...progress,revision:0},{...progress,sourceHash:'a'.repeat(64)},
+    {...progress,cues:[{id:'next',text:'건너뛴 합성 자막.'}]},
+    {...progress,cues:[{id:'first',text:' '}]},{...progress,cues:[{id:'first',text:'변경',endMs:3000}]}
+  ])assert.throws(()=>core.validateTranslationProgress(bad,request));
+});
+
+test('progress withholds every simultaneous or overlapping cue across the unpublished boundary',async()=>{
+  const request=await core.makeTranslationRequest({media,source:{cues:[cue('long',1000,6000),cue('first-line',2000,3000),cue('second-line',2000,3000),cue('later',4000,5000)]}});
+  const progress={...request.outputTemplate,kind:'ottspeed.translation-progress',revision:1,cues:request.slots.slice(0,2).map(c=>({id:c.id,text:'합성 번역.'}))};
+  expectCode(()=>core.validateTranslationProgress(progress,request),'INCOMPLETE_BOUNDARY');
+  progress.cues=request.slots.slice(0,3).map(c=>({id:c.id,text:'합성 번역.'}));
+  expectCode(()=>core.validateTranslationProgress(progress,request),'INCOMPLETE_BOUNDARY');
+  progress.cues=request.slots.map(c=>({id:c.id,text:'합성 번역.'}));
+  assert.equal(core.validateTranslationProgress(progress,request).cues.length,4);
+});
+
+test('Netflix class-qualified closing tags become plain text without changing IDs or times', () => {
+  const result = core.parse('WEBVTT\n\nnetflix-line\n00:01.010 --> 00:03.020\n<c.white><c.mono_sans>A synthetic caption.</c.mono_sans></c.white>\n');
+  assert.deepEqual(result.cues, [cue('netflix-line', 1010, 3020, 'A synthetic caption.')]);
+  assert.equal(core.plainText('&lt;/c.white&gt; literal'), '</c.white> literal');
+});
+
 test('malformed files fail instead of silently dropping blocks', () => {
   const invalid = [
     ['', 'EMPTY_TRACK'],

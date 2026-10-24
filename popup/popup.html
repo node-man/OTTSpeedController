@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>OTTSpeed</title>
+  <title>OTTDeck</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -10,7 +10,7 @@
     <header>
       <div class="logo">
         <img src="../icons/icon-48.png" alt="OTT Speed" width="32" height="32">
-        <h1>OTTSpeed</h1>
+        <h1>OTTDeck</h1>
       </div>
       <div class="status" id="status">
         <span class="status-dot"></span>
@@ -50,7 +50,19 @@
       <span class="hint">영상 페이지를 새로고침한 후 다시 열어주세요.</span>
     </div>
 
-    <button class="workspace-btn" id="workspace-btn">자막·번역 작업실 열기 <span>↗</span></button>
+    <section class="translation-controls" aria-label="자막 번역">
+      <button class="workspace-btn secondary" id="runtime-connect-btn">번역 연결 시작 <span>⏻</span></button>
+      <p id="runtime-status" role="status">로컬 번역 연결 확인 중…</p>
+      <button class="workspace-btn" id="translate-btn">번역 시작 <span>⧉</span></button>
+      <p class="workspace-hint">자동 연결이 설정되면 바로 번역을 요청하고, 그전에는 프롬프트를 복사합니다.</p>
+      <p id="copy-status" role="status"></p>
+      <textarea id="copy-prompt" aria-label="복사하지 못한 번역 프롬프트" readonly hidden></textarea>
+      <p id="translation-status" role="status">첫 구간이 번역되면 처음부터 재생할 수 있습니다.</p>
+      <p id="execution-status" role="status"></p>
+      <button class="workspace-btn" id="play-translated-btn" disabled>처음부터 B로 재생 <span>▶</span></button>
+    </section>
+    <button class="workspace-btn secondary" id="library-btn">자막 라이브러리 <span>↗</span></button>
+    <button class="workspace-btn secondary" id="workspace-btn">자막·번역 작업실 열기 <span>↗</span></button>
     <p class="workspace-hint">자막 불러오기 · A/B 비교 · 번역 파일 교환</p>
     <p id="error" role="status"></p>
     <footer>
@@ -63,7 +75,12 @@
       </button>
     </footer>
   </div>
+  <script src="../shared/product.js"></script>
+  <script src="../modules/runtime/bridge-http.js"></script>
 
+  <script src="../subtitles/core.js"></script>
+  <script src="../subtitles/translation-prompt.js"></script>
+  <script src="../subtitles/bridge-client.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

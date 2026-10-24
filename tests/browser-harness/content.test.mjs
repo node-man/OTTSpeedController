@@ -80,6 +80,20 @@ async function makeContent({ url = 'https://www.netflix.com/watch/101', speed = 
   return { ...env, video, storage, messages, timers, intervals, observers, send, getState, tick, mutate, keyboard, dispose };
 }
 
+test('explicit translated playback starts at zero only for the ready current episode and request',async()=>{
+  const f=await makeContent();
+  const session=sessionFor('netflix:101','합성 A.');
+  session.tracks.b={...cueTrack('합성 B.'),requestId:'synthetic-job',provenance:'chatgpt-mcp-partial',partial:true,totalCueCount:10,readyThroughMs:3000};
+  session.settings.activeTarget='b';await f.send({action:'loadSubtitleSession',session});
+  let plays=0;f.video.currentTime=100;f.video.play=async()=>{plays++;f.video.paused=false;};
+  assert((await f.send({action:'playTranslationFromStart',mediaKey:'netflix:102',requestId:'synthetic-job'})).error);
+  assert((await f.send({action:'playTranslationFromStart',mediaKey:'netflix:101',requestId:'wrong-job'})).error);
+  assert.equal(f.video.currentTime,100);assert.equal(plays,0);
+  await f.send({action:'playTranslationFromStart',mediaKey:'netflix:101',requestId:'synthetic-job'});
+  assert.equal(f.video.currentTime,0);assert.equal(plays,1);assert.equal(f.video.paused,false);
+  f.dispose();
+});
+
 test('content preserves saved speed, applies valid updates, and rejects invalid rates', async () => {
   const f = await makeContent();
   const initial = await f.getState();

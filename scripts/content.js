@@ -1,4 +1,4 @@
-/* OTTSpeed: playback controls and per-video subtitle sessions. */
+/* OTTDeck: playback controls and per-video subtitle sessions. */
 (() => {
   'use strict';
   if (globalThis.__OTT_SPEED_CONTROLLER__) return;
@@ -52,7 +52,7 @@
     if (signature === previousState) return;
     previousState = signature;
     const small = { hasVideo: value.hasVideo, isPlaying: value.isPlaying, currentSpeed: value.currentSpeed };
-    void safeSend({ action: 'updateVideoState', ...small });
+    void safeSend({ action: 'updateVideoState', ...small, mediaKey: media?.key || null });
     void safeSend({ action: 'videoStateChanged', ...small });
   }
 
@@ -216,7 +216,7 @@
   }
   document.addEventListener('keydown', keyboard);
 
-  const actions = new Set(['checkVideo', 'getSpeed', 'setSpeed', 'subtitleState', 'loadSubtitleSession', 'listNativeTracks', 'captureNativeTrack']);
+  const actions = new Set(['checkVideo', 'getSpeed', 'setSpeed', 'subtitleState', 'loadSubtitleSession', 'listNativeTracks', 'captureNativeTrack', 'playTranslationFromStart']);
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id || !actions.has(message?.action)) return false;
     ready.then(async () => {
@@ -225,6 +225,16 @@
         case 'checkVideo': case 'subtitleState': return state();
         case 'getSpeed': return { speed: state().currentSpeed };
         case 'setSpeed': return setSpeed(message.speed);
+        case 'playTranslationFromStart': {
+          const view=subtitles.getState();
+          if(message.mediaKey !== media?.key || message.requestId !== view.translation?.requestId || !view.translation?.readyCueCount ||
+              !view.settings.enabled || view.settings.activeTarget !== 'b' || view.settings.display === 'source' || !activeVideo?.isConnected) throw new Error('현재 회차의 B 첫 구간이 준비된 뒤 재생할 수 있습니다.');
+          const video=activeVideo,key=media.key;
+          video.currentTime=0;
+          if(activeVideo !== video || media.key !== key) throw new Error('재생 전에 영상이 바뀌었습니다.');
+          await video.play();
+          return state();
+        }
         case 'loadSubtitleSession': {
           if (message.session?.mediaKey !== media?.key) throw new Error('영상이 바뀌었습니다. 현재 영상의 자막을 다시 선택하세요.');
           subtitles.loadSession(message.session);

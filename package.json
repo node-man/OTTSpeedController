@@ -1,13 +1,32 @@
 {
-  "name": "ottspeed-controller",
-  "version": "1.1.0",
+  "name": "ottdeck",
+  "version": "1.2.0",
   "private": true,
-  "description": "OTTSpeed playback controls and local subtitle translation workspace",
+  "description": "OTTDeck playback, subtitles, translation and personal viewing library",
   "scripts": {
-    "test": "node tests/subtitle-core.test.js && node tests/browser-harness/controller.test.mjs && node tests/browser-harness/content.test.mjs && node tests/browser-harness/popup-background.test.mjs && node tests/browser-harness/workspace.test.mjs",
+    "test": "node tests/subtitle-core.test.js && node tests/subtitle-catalog.test.mjs && node tests/subtitle-library-archive.test.mjs && node tests/subtitle-preparation.test.mjs && node tests/netflix-capture.test.mjs && node tests/collection-queue.test.mjs && node tests/netflix-series-queue.test.mjs && node tests/chatgpt-plan.test.mjs && node tests/translation-cost.test.mjs && node tests/local-runtime.test.mjs && node tests/architecture.test.mjs && node tests/workspace-agent.test.mjs && node tests/translation-bridge.test.mjs && node tests/translation-batch.test.mjs && node tests/translation-worker.test.mjs && node tests/browser-harness/controller.test.mjs && node tests/browser-harness/content.test.mjs && node tests/browser-harness/popup-background.test.mjs && node tests/browser-harness/workspace.test.mjs && node tests/browser-harness/library.test.mjs",
+    "bridge": "node scripts/translation-bridge-server.mjs",
+    "workspace-agent:check": "node scripts/workspace-agent-check.mjs",
     "test:browser": "node tests/smoke.mjs",
     "check": "node scripts/check.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "batch:prepare": "node scripts/prepare-translation-batch.mjs",
+    "netflix:login": "node scripts/capture-netflix-headless.mjs --setup",
+    "netflix:capture": "node scripts/capture-netflix-headless.mjs",
+    "netflix:collect-series": "node scripts/collect-netflix-series.mjs",
+    "netflix:verify-series": "node scripts/verify-netflix-series.mjs",
+    "chatgpt:login": "node scripts/chatgpt-plan-login.mjs",
+    "chatgpt:verify-translation": "node scripts/chatgpt-plan-smoke.mjs",
+    "chatgpt:translate-episode": "node scripts/translate-episode-chatgpt-plan.mjs",
+    "runtime:install": "powershell.exe -NoProfile -File scripts/install-native-runtime-host.ps1"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@xmldom/xmldom": "0.9.12",
+    "jose": "6.2.13",
+    "zod": "3.25.76"
+  }
 }

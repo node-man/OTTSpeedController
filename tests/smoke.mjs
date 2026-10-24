@@ -36,7 +36,7 @@ if (!existsSync(executablePath)) {
 
 const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
 assert.equal(manifest.manifest_version, 3);
-assert.deepEqual(manifest.content_scripts[0].js, [
+assert.deepEqual(manifest.content_scripts.find(entry=>entry.matches.includes('<all_urls>')).js, [
   'subtitles/core.js', 'subtitles/controller.js', 'scripts/content.js'
 ]);
 
@@ -60,7 +60,7 @@ function makeSilentWav(seconds = 30) {
   return wav;
 }
 const fixture = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>OTTSpeed synthetic fixture</title><style>
+<title>OTTDeck synthetic fixture</title><style>
 body { margin: 20px; background: #eee; } #player { width: 640px; height: 360px; position: relative; }
 video { width: 640px; height: 360px; background: #223; } #player:fullscreen { width: 100vw; height: 100vh; }
 #player:fullscreen video { width: 100%; height: 100%; } input,button,[contenteditable] { margin: 8px; }

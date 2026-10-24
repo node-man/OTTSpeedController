@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createQueue,validateInventory,validateQueue,saveQueue,queueSummary} from '../scripts/netflix-series-queue.mjs';
+const inventory={kind:'ottspeed.netflix-series-inventory',version:1,seriesId:'123',series:'fixture',seasons:[{season:1,expectedCount:2,episodes:[{season:1,episode:1,title:'One',videoId:'111'},{season:1,episode:2,title:'Two',videoId:'113'}]},{season:7,expectedCount:1,episodes:[{season:7,episode:1,title:'Last',videoId:'999'}]}]};
+const queue=createQueue(inventory);assert.deepEqual(queue.entries.map(e=>e.videoId),['111','113','999']);assert.equal(queue.entries.at(-1).key,'S07E01');
+const missing=structuredClone(inventory);missing.seasons[0].episodes.pop();assert.throws(()=>validateInventory(missing));
+const duplicate=structuredClone(inventory);duplicate.seasons[1].episodes[0].videoId='111';assert.throws(()=>validateInventory(duplicate));
+const changed=structuredClone(queue);changed.entries[0].videoId='112';assert.throws(()=>validateQueue(changed,inventory));
+queue.entries[0].status='verified';queue.entries[0].artifact={cueCount:3};queue.entries[1].status='collecting';queue.entries[2].status='failed';
+const home=await mkdtemp(join(tmpdir(),'ottspeed-series-'));await saveQueue(home,queue);
+const restored=validateQueue(JSON.parse(await readFile(join(home,'queue.json'),'utf8')),inventory),summary=queueSummary(restored);
+assert.equal(summary.verified,1);assert.equal(summary.pending,1);assert.equal(summary.failed,1);assert.equal(summary.cueCount,3);assert.equal(summary.lastEpisodeVerified,false);
+console.log('PASS series inventory accounting, non-consecutive IDs, duplicate/changed identity rejection, durable interrupted queue and final-episode status');

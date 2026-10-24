@@ -55,6 +55,12 @@ test('paused seeks render source/target, overlaps, and exclusive end without cha
   f.controller.destroy();
 });
 
+test('official plan B renders at current playback time and exposes completed translation without seeking or changing rate',async()=>{
+  const f=await fixture(),session=makeSession();session.tracks.a=null;session.tracks.b={...track('공식 연동 합성 번역.'),requestId:'plan-translation',provenance:'chatgpt-plan',partial:false,totalCueCount:2,readyThroughMs:5000};session.settings.activeTarget='b';
+  f.video.currentTime=1.5;f.video.playbackRate=1.75;const paused=f.video.paused;f.controller.loadSession(session);
+  const state=f.controller.getState();assert.equal(state.targetText,'공식 연동 합성 번역.');assert.equal(state.translation.requestId,'plan-translation');assert.equal(state.translation.partial,false);assert.equal(state.translation.readyCueCount,2);assert.equal(f.video.currentTime,1.5);assert.equal(f.video.playbackRate,1.75);assert.equal(f.video.paused,paused);f.controller.destroy();
+});
+
 test('offset and drift scale are applied once to the media clock', async () => {
   const f = await fixture();
   f.controller.loadSession(makeSession({ offsetMs: 1000, scale: 2 }));
@@ -66,6 +72,20 @@ test('offset and drift scale are applied once to the media clock', async () => {
   f.seek(5); // End is exclusive: (5000 - 1000) / 2 = 2000 ms.
   assert.equal(f.controller.getState().currentText, '');
   f.controller.destroy();
+});
+
+test('partial B keeps fixed times, falls back to English beyond readiness, and clears pending on final delivery',async()=>{
+  const f=await fixture(),session=makeSession({display:'target',activeTarget:'b'});
+  session.tracks.b={...track('합성 첫 번역.'),cues:[{id:'one',startMs:1000,endMs:2000,text:'합성 첫 번역.'}],
+    requestId:'synthetic-job',provenance:'chatgpt-mcp-partial',partial:true,totalCueCount:2,readyThroughMs:4000};
+  f.controller.loadSession(session);f.seek(1.5);
+  assert.equal(f.controller.getState().targetText,'합성 첫 번역.');assert.equal(f.controller.getState().translation.readyCueCount,1);
+  f.seek(4.5);assert.equal(f.controller.getState().targetText,'');assert.equal(f.controller.getState().sourceText,`${sourceText} 두 번째.`);
+  assert.equal(f.controller.getState().warningCode,'TRANSLATION_PENDING');
+  session.tracks.b={...track('합성 완성 번역.'),requestId:'synthetic-job',provenance:'chatgpt-mcp',partial:false,totalCueCount:2,readyThroughMs:5000};
+  f.controller.loadSession(session);
+  assert.equal(f.controller.getState().targetText,'합성 완성 번역. 두 번째.');assert.equal(f.controller.getState().warningCode,null);
+  assert.equal(f.controller.getState().sourceText,'');f.controller.destroy();
 });
 
 test('per-track timing aligns an existing Korean track without shifting the English source', async () => {
@@ -126,6 +146,20 @@ test('caption markup stays literal text and never creates DOM nodes', async () =
   assert.equal(shadow.querySelector('[data-subtitle-line="target"]').textContent, unsafe);
   assert.equal(shadow.querySelectorAll('img').length, 0);
   assert.equal(shadow.querySelectorAll('script').length, 0);
+  f.controller.destroy();
+});
+
+test('legacy Netflix source class closers are hidden without mutating the saved snapshot or target', async () => {
+  const f = await fixture();
+  const session = makeSession();
+  const legacy = 'Synthetic source.</c.mono_sans></c.white> & literal <i>text</i>';
+  session.tracks.source = { ...track(legacy), capture: { format: 'vtt' } };
+  session.tracks.a = track('Literal target </c.white>');
+  const snapshot = JSON.stringify(session);
+  f.controller.loadSession(session); f.seek(1.5);
+  assert.equal(f.controller.getState().sourceText, 'Synthetic source. & literal <i>text</i>');
+  assert.equal(f.controller.getState().targetText, 'Literal target </c.white>');
+  assert.equal(JSON.stringify(session), snapshot);
   f.controller.destroy();
 });
 

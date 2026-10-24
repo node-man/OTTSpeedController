@@ -12,7 +12,7 @@
         resolve(database);
       };
       request.onerror = () => { databasePromise = null; reject(request.error); };
-      request.onblocked = () => { databasePromise = null; reject(new Error('다른 OTTSpeed 작업실을 닫고 다시 시도하세요.')); };
+      request.onblocked = () => { databasePromise = null; reject(new Error('다른 OTTDeck 작업실을 닫고 다시 시도하세요.')); };
     });
     return databasePromise;
   }
@@ -53,9 +53,25 @@
   }
   globalThis.OTTSubtitleLibrary = Object.freeze({
     get: mediaKey => transaction('readonly', store => store.get(mediaKey)),
-    put: session => {
+    list: () => transaction('readonly', store => store.getAll()),
+    put: async session => {
       if (!session?.mediaKey) return Promise.reject(new Error('영상 식별자가 없습니다.'));
-      return write(session.mediaKey, session.revision || 0, session);
+      const previous=await transaction('readonly',store=>store.get(session.mediaKey));
+      const candidate=await OTTSubtitleCatalog.prepareWrite(previous,session);
+      return write(session.mediaKey, session.revision || 0, candidate);
+    },
+    restore: async sessions => {
+      if(!Array.isArray(sessions)||sessions.length>500||new Set(sessions.map(s=>s.mediaKey)).size!==sessions.length)throw new Error('복원할 회차 목록이 올바르지 않습니다.');
+      const clean=await Promise.all(sessions.map(OTTSubtitleCatalog.cleanSession));
+      const database=await open();
+      return new Promise((resolve,reject)=>{
+        const tx=database.transaction('sessions','readwrite'),store=tx.objectStore('sessions');let inserted=0,skipped=0;
+        for(const session of clean){const request=store.get(session.mediaKey);request.onsuccess=()=>{
+          if(request.result){skipped++;return;}
+          store.put({...session,revision:crypto.randomUUID(),updatedAt:new Date().toISOString()});inserted++;
+        };}
+        tx.oncomplete=()=>resolve({inserted,skipped});tx.onerror=()=>reject(tx.error||new Error('백업 복원에 실패했습니다.'));tx.onabort=()=>reject(tx.error||new Error('백업 복원이 중단됐습니다.'));
+      });
     },
     remove: (mediaKey, revision = 0) => write(mediaKey, revision, null)
   });
