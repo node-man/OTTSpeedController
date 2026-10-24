@@ -58,7 +58,8 @@ function Invoke-HostFixture([string]$Action,[string]$OriginValue=$origin,[switch
     return $result
   } finally { $process.Dispose() }
 }
-if ((Invoke-HostFixture 'status').state -ne 'stopped') { throw 'Missing service was reported ready.' }
+$statusResponse = Invoke-HostFixture 'status'
+if ($statusResponse.state -ne 'stopped') { throw ('Unexpected stopped-runtime response: ' + ($statusResponse | ConvertTo-Json -Compress)) }
 if ((Invoke-HostFixture 'stop').errorCode -ne 'invalid_request') { throw 'Unknown action was accepted.' }
 if ((Invoke-HostFixture 'ensure' -Extra).errorCode -ne 'invalid_request') { throw 'Arbitrary command was accepted.' }
 if ((Invoke-HostFixture 'status' -OriginValue 'chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/').errorCode -ne 'forbidden_origin') { throw 'Different extension was accepted.' }
