@@ -6,15 +6,16 @@ import {readFile} from 'node:fs/promises';
 import {makeEnvironment} from './dom.mjs';
 import catalog from '../../subtitles/catalog.js';
 import core from '../../subtitles/core.js';
-const transportModules=await Promise.all(['shared/product.js','modules/runtime/bridge-http.js'].map(path=>readFile(new URL('../../'+path,import.meta.url),'utf8')));
+const transportModules=await Promise.all(['shared/product.js','modules/runtime/bridge-http.js','modules/library/mcp-registration.js'].map(path=>readFile(new URL('../../'+path,import.meta.url),'utf8')));
 
 const html=await readFile(new URL('../../subtitles/library.html',import.meta.url),'utf8');
 const script=await readFile(new URL('../../subtitles/library-page.js',import.meta.url),'utf8');
 const media=id=>({key:`netflix:${id}`,platform:'netflix',videoId:String(id),url:`https://www.netflix.com/watch/${id}`});
 const track=(text,lang='en')=>({name:`synthetic.${lang}.vtt`,language:lang,format:'vtt',cues:[{id:'one',startMs:1000,endMs:2000,text}],sync:{offsetMs:0,scale:1}});
 const session=(id=101)=>({mediaKey:media(id).key,media:media(id),catalog:{title:'합성 작품',season:2,episode:id===101?3:4},tracks:{source:track('A synthetic original line.'),a:track('기준 합성 자막.','ko'),b:track('<img src=x onerror=throw()>문자 그대로.','ko')},settings:{enabled:true,activeTarget:'a',fontSize:56,display:'bilingual'},revision:`r-${id}`});
+import {until} from './wait.mjs';
 const tick=()=>new Promise(r=>setImmediate(r));
-async function until(check){for(let i=0;i<300;i++){if(check())return;await tick();}throw new Error('Library UI did not settle');}
+import {collected} from '../fixtures/collected.mjs';
 async function environment(values=[session()],{archive=[],paired=false}={}) {
  const env=await makeEnvironment(),{context,document}=env;const downloads=[],blobs=new Map(),calls=[],runtime=[],stored=paired?{ottspeedBridge:{token:'synthetic-token'}}:{},intervals=[],bridgeState={ready:false,execution:null,startFailure:false},collection={version:1,paused:false,entries:[]},batches=new Map(),details=new Map(),map=new Map(values.map(s=>[s.mediaKey,structuredClone(s)]));let rev=0,restores=0;
  async function makeDetail(jobId,value){const sourceTrack=structuredClone(value.tracks.source);sourceTrack.capture={...sourceTrack.capture,mediaKey:value.mediaKey,fullEpisode:true};const request=await core.makeTranslationRequest({media:value.media,source:sourceTrack});request.requestId=jobId;request.outputTemplate.requestId=jobId;return {jobId,media:value.media,mediaKey:value.mediaKey,request,sourceHash:request.sourceHash,sourceTrack};}
@@ -32,14 +33,15 @@ async function environment(values=[session()],{archive=[],paired=false}={}) {
   else if(url.endsWith('/library/archive'))data={kind:'ottspeed.library-archive-index',version:1,episodeCount:archive.length,episodes:archive.map(e=>({mediaKey:e.mediaKey,videoId:e.media.videoId,catalog:e.catalog,revision:e.revision}))};
   else if(url.includes('/library/archive/'))data=structuredClone(archive.find(e=>e.media.videoId===url.split('/').at(-1)));
   else if(url.endsWith('/execution'))data={ready:bridgeState.ready};
-  else if(url.endsWith('/jobs')&&options.method==='POST'){const body=JSON.parse(options.body);data={jobId:`job-${body.media.videoId}`};details.set(data.jobId,await makeDetail(data.jobId,{media:body.media,mediaKey:body.media.key,tracks:{source:body.source}}));}
+  else if(url.endsWith('/jobs')&&options.method==='POST'){const body=JSON.parse(options.body);data={jobId:`job-${body.media.videoId}`,mediaKey:body.media.key,sourceHash:(await core.makeTranslationRequest({media:body.media,source:body.source})).sourceHash,capture:body.source.capture,cueCount:body.source.cues.length,chunkCount:1,savedChunkCount:0,status:'translating'};details.set(data.jobId,{...await makeDetail(data.jobId,{media:body.media,mediaKey:body.media.key,tracks:{source:body.source}}),...data});}
+  else if(url.endsWith('/jobs')&&options.method==='GET')data={jobs:structuredClone([...details.values()].filter(d=>d.status))};
   else if(url.endsWith('/batches')&&options.method==='GET')data={batches:structuredClone([...batches.values()])};
   else if(url.endsWith('/batches')){const ids=JSON.parse(options.body).jobIds;data={batchId:'batch-fixture',entries:ids.map(jobId=>({jobId,sourceHash:details.get(jobId).sourceHash,mediaKey:details.get(jobId).mediaKey})),completedCount:0,pendingCount:ids.length,blockedCount:0,status:'translating'};batches.set(data.batchId,structuredClone(data));}
   else if(url.endsWith('/start')){if(bridgeState.startFailure)throw new TypeError('Synthetic request outcome unknown');data={mode:'workspace-agent',state:'queued',retryable:false,translationComplete:false};bridgeState.execution=data;}
   else {const id=url.split('/').at(-1);if(url.includes('/jobs/')&&details.has(id))data=structuredClone(details.get(id));else{if(!batches.has(id))throw new Error('Unexpected bridge call');data={...structuredClone(batches.get(id)),execution:structuredClone(bridgeState.execution)};}}
   return {ok:true,json:async()=>data};
  };
- for(const file of ['catalog.js','translation-prompt.js','bridge-client.js'])vm.runInContext(await readFile(new URL(`../../subtitles/${file}`,import.meta.url),'utf8'),context,{filename:file});
+ for(const file of ['catalog.js','translation-prompt.js','bridge-client.js','netflix.js','capture-validation.js'])vm.runInContext(await readFile(new URL(`../../subtitles/${file}`,import.meta.url),'utf8'),context,{filename:file});
  for(const code of transportModules)vm.runInContext(code,context);
  vm.runInContext(script,context,{filename:'library-page.js'});await until(()=>document.getElementById('library-count').textContent.includes('个')||document.getElementById('library-count').textContent.includes('개 회차'));
  if(!archive.length)await until(()=>calls.some(c=>c.url?.endsWith('/library/archive'))&&!document.getElementById('refresh').disabled);
@@ -73,11 +75,11 @@ test('VTT export keeps original timings and backup/restore validates before pres
 });
 
 test('batch preparation uses only selected collected originals and registers receiving without opening a playback tab',async()=>{
- const values=[session(),session(202)];for(const s of values){s.tracks.source.provenance='netflix-manifest-resource';s.tracks.source.capture={fullEpisode:true};}
+ const values=[session(),session(202)];for(const s of values)s.tracks.source=collected(s.media.videoId,s.tracks.source.cues).source;
  const f=await environment(values);f.el('select-visible').dispatchEvent('click');f.el('prepare-batch').dispatchEvent('click');await until(()=>f.stored.ottspeedLibrary?.lastBatchId==='batch-fixture');
  assert.equal(f.el('batch-start').hidden,true);assert.equal(f.el('batch-start').disabled,true);assert.equal(f.el('batch-copy').disabled,false);assert.match(f.el('execution-mode').textContent,/기본 방식은 프롬프트 복사/);
  assert.equal(f.runtime.filter(m=>m.action==='watchLibraryTranslation').length,2);
- const jobs=f.calls.filter(c=>c.url?.endsWith('/jobs'));assert.equal(jobs.length,2);assert(jobs.every(c=>!('reference' in JSON.parse(c.options.body))));
+ const jobs=f.calls.filter(c=>c.url?.endsWith('/jobs')&&c.options.method==='POST');assert.equal(jobs.length,2);assert(jobs.every(c=>!('reference' in JSON.parse(c.options.body))));
  f.el('batch-copy').dispatchEvent('click');await until(()=>f.calls.some(c=>c.clipboard));const prompt=f.calls.find(c=>c.clipboard).clipboard;assert(prompt.includes('job-101')&&prompt.includes('job-202'));assert.match(prompt,/다음 회차로/);
  assert(!f.calls.some(c=>c.url?.endsWith('/start')));
 });
@@ -89,6 +91,18 @@ test('library exposes stale original links in the list and filters them separate
  f.el('state-filter').value='B 보관';f.el('state-filter').dispatchEvent('change');assert.equal(f.el('episode-list').children.length,0);
  f.el('state-filter').value='원문 변경';f.el('state-filter').dispatchEvent('change');assert.equal(f.el('episode-list').children.length,1);openFirst(f);
  const items=await catalog.assets(value),b=items.find(a=>a.role==='b');f.el('asset-select').value=b.assetId;f.el('asset-select').dispatchEvent('change');assert.match(f.el('asset-status').textContent,/다른 원문 버전/);
+});
+
+test('automatic registration exposes every collected source but the prepared prompt contains only the selected episode',async()=>{
+ const values=[session(101),session(202),session(303)];for(const s of values)s.tracks.source=collected(s.media.videoId,s.tracks.source.cues).source;
+ const f=await environment(values);assert.equal(f.calls.filter(c=>c.url?.endsWith('/jobs')&&c.options.method==='POST').length,3);
+ assert.equal(f.runtime.filter(m=>m.action==='watchLibraryTranslation').length,0);assert(!f.calls.some(c=>c.clipboard||c.url?.endsWith('/start')||c.url?.endsWith('/batches')));
+ const check=f.el('episode-list').children[1].children[0].children[0];check.checked=true;check.dispatchEvent('change');f.el('prepare-batch').dispatchEvent('click');await until(()=>f.stored.ottspeedLibrary?.lastBatchId);
+ const prepared=f.calls.find(c=>c.url?.endsWith('/batches')&&c.options.method==='POST');assert.deepEqual(JSON.parse(prepared.options.body).jobIds,['job-202']);
+ const receiving=f.runtime.filter(m=>m.action==='watchLibraryTranslation');assert.equal(receiving.length,1);assert.equal(receiving[0].selectResults,false);
+ f.el('batch-copy').dispatchEvent('click');await until(()=>f.calls.some(c=>c.clipboard));const prompt=f.calls.find(c=>c.clipboard).clipboard;assert(prompt.includes('job-202'));assert(!prompt.includes('job-101')&&!prompt.includes('job-303'));
+ for(const value of values){assert.deepEqual(f.map.get(value.mediaKey).tracks,value.tracks);assert.deepEqual(f.map.get(value.mediaKey).settings,value.settings);}
+ assert(!f.calls.some(c=>c.url?.endsWith('/start')));
 });
 
 test('saved batches reopen by authenticated reads without launching execution or changing episode selections',async()=>{
@@ -147,7 +161,7 @@ test('paired library expands three saved episodes to 156 named archive entries a
   const old=[session(101),session(202),session(303)];for(const s of old)s.catalog={title:'',season:null,episode:null};
   const entries=[];
   for(let i=0;i<156;i++){
-    const id=i<3?[101,202,303][i]:1000+i,m=media(id),source=track('A synthetic original line.');source.provenance='netflix-manifest-resource';source.capture={mediaKey:m.key,fullEpisode:true};
+    const id=i<3?[101,202,303][i]:1000+i,m=media(id),source=collected(id,track('A synthetic original line.').cues).source;
     const request=await core.makeTranslationRequest({media:m,source,reference:null,mode:'translate'}),translations=[];
     if(i===27){const response={...request.outputTemplate,cues:[{id:'one',text:'전편 합성 번역.'}]};translations.push({request,response,resultHash:await catalog.hash(response),name:'S02E06.gpt-6-astra.high.ko.B.vtt'});}
     entries.push({kind:'ottspeed.library-archive-episode',version:1,revision:`archive-${i}`,mediaKey:m.key,media:m,catalog:{title:'합성 작품',season:1+Math.floor(i/22),episode:1+i%22,episodeTitle:`합성 회차 ${i+1}`},sourceHash:request.sourceHash,sourceTrack:source,translations});
@@ -157,7 +171,7 @@ test('paired library expands three saved episodes to 156 named archive entries a
   await until(()=>f.el('notice').textContent.includes('156개 회차와 완료된 번역'));
   assert.equal(f.map.size,156);assert.match(f.el('library-count').textContent,/156개 회차/);assert(!f.el('episode-list').textContent.includes('작품 미지정'));
   for(const value of old){assert.deepEqual(f.map.get(value.mediaKey).tracks,value.tracks);assert.deepEqual(f.map.get(value.mediaKey).settings,value.settings);}
-  f.el('search').value='S02E06';f.el('search').dispatchEvent('input');assert.equal(f.el('episode-list').children.length,1);assert.match(f.el('episode-list').textContent,/시즌 2 · 6화/);assert.match(f.el('episode-list').textContent,/전편 번역/);assert.match(f.el('episode-list').textContent,/1\/1개/);
+  f.el('search').value='S02E06';f.el('search').dispatchEvent('input');assert.equal(f.el('episode-list').children.length,1);assert.match(f.el('episode-list').textContent,/시즌 2 · 6화/);assert.match(f.el('episode-list').textContent,/완료/);assert.match(f.el('episode-list').textContent,/1\/1개/);
   const episode=f.map.get('netflix:1027');assert.equal(episode.tracks.b.cues[0].text,'전편 합성 번역.');assert.equal(episode.settings.activeTarget,'b');assert.equal((await catalog.summarize(episode)).bCount,1);
   const before=f.calls.filter(c=>c.url?.includes('/library/archive/')).length;
   f.el('refresh').dispatchEvent('click');await until(()=>f.el('notice').textContent.includes('저장된 자료를 새로'));

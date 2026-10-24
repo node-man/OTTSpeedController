@@ -23,7 +23,7 @@ test('TTML independently reparses original IDs and times',async()=>{
   const f=fixture('123','<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p xml:id="a" begin="1s" end="3s">First<br/>Second.</p></div></body></tt>');f.track.capture.track.profile='dfxp-ls-sdh';
   assert.equal((await validation.resource(f,media('123'),DOMParser)).independentReparseMatches,true);
 });
-function harness({stored=null,cached=null,viewer=false,result=fixture(),ready=true,issue=null,onCapture=null,onCreate=null}={}){
+function harness({stored=null,cached=null,viewer=false,result=fixture(),ready=true,issue=null,onCapture=null,onCreate=null,onSaved}={}){
   let clock=1000,next=10;const store=stored?{ottspeedCollection:structuredClone(stored)}:{},tabs=new Map(),states=new Map(),created=[],removed=[],messages=[],writes=[],sessions=new Map(cached?[[cached.mediaKey,structuredClone(cached)]]:[]),alarms=new Map(),timers=new Map();
   if(viewer)tabs.set(1,{id:1,active:true,url:'https://www.netflix.com/watch/999'});
   const chrome={storage:{local:{get:async key=>({[key]:structuredClone(store[key])}),set:async value=>Object.assign(store,structuredClone(value))}},alarms:{get:async name=>alarms.get(name),create:async(name,value)=>alarms.set(name,value),clear:async name=>alarms.delete(name)},tabs:{
@@ -34,10 +34,23 @@ function harness({stored=null,cached=null,viewer=false,result=fixture(),ready=tr
   }};
   const library={get:async key=>structuredClone(sessions.get(key)),put:async value=>{writes.push(structuredClone(value));sessions.set(value.mediaKey,structuredClone(value));}};
   const context=vm.createContext({chrome,crypto:webcrypto,structuredClone,setTimeout:fn=>{const id=timers.size+1;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id)});vm.runInContext(code,context);
-  const queue=context.OTTCollectionQueue({chrome,core,validation,library,now:()=>clock,timeoutMs:90000});
+  const queue=context.OTTCollectionQueue({chrome,core,validation,library,onSaved,now:()=>clock,timeoutMs:90000});
   return {queue,store,tabs,states,created,removed,messages,writes,sessions,alarms,timers,library,advance:ms=>{clock+=ms;},restart:()=>context.OTTCollectionQueue({chrome,core,validation,library,now:()=>clock,timeoutMs:90000})};
 }
 async function drain(f){await f.queue.tick();return f.queue.status();}
+test('a committed capture triggers registration; a disconnected bridge does not discard the source',async()=>{
+  let notified=0;const f=harness({onSaved:async()=>{assert.equal(f.writes.length,1);notified++;throw new Error('bridge offline');}});
+  await f.queue.enqueue(['123']);assert.equal((await drain(f)).entries[0].status,'complete');assert.equal(notified,1);assert.equal(f.sessions.get('netflix:123').tracks.source.cues.length,2);
+});
+test('restart clears persisted cleanup for vanished tabs and continues with the next episode',async()=>{
+  for(const tabId of [10,null]){
+    const f=harness();await f.queue.enqueue(['123','124']);await drain(f);
+    const first=f.store.ottspeedCollection.entries[0];Object.assign(first,{tabId,cleanupPending:true,cleanupExpected:true,cleanupStartedAt:1000});
+    const restarted=f.restart();await restarted.initialize();await restarted.tick();await restarted.tick();
+    const state=await restarted.status();assert.equal(state.entries[0].tabId,null);assert.equal(state.entries[0].cleanupPending,false);assert.equal(state.entries[0].cleanupExpected,false);
+    assert.notEqual(state.entries[1].status,'queued');assert.equal(f.created.length,2);
+  }
+});
 test('serial queue uses inactive owned tabs, preserves A/B/settings, and archives independently validated source',async()=>{
   const old={mediaKey:'netflix:123',media:media('123'),tracks:{source:null,a:{name:'keep A'},b:{name:'keep B'}},settings:{fontSize:56,activeTarget:'b'},revision:2},f=harness({cached:old});
   await f.queue.enqueue(['123','124']);let s=await drain(f);assert.equal(s.entries[0].status,'complete');assert.equal(s.entries[1].status,'queued');assert.equal(f.created[0].active,false);assert.match(f.created[0].url,/#ottspeed-capture=/);assert.equal(f.removed.length,1);

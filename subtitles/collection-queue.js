@@ -1,7 +1,7 @@
 /* Durable, serial background collection. Only explicit watch IDs; no player API. */
 (() => {
   'use strict';
-  globalThis.OTTCollectionQueue=function({chrome,core,validation,library,now=()=>Date.now(),timeoutMs=90000}) {
+  globalThis.OTTCollectionQueue=function({chrome,core,validation,library,onSaved=async()=>{},now=()=>Date.now(),timeoutMs=90000}) {
     const KEY='ottspeedCollection',ALARM='ottspeed-collection-poll',terminal=new Set(['complete','needs_attention','cancelled']);
     let mutations=Promise.resolve(),ticking=null,timer=null,processingId=null;
     const read=async()=>{const s=(await chrome.storage.local.get(KEY))[KEY];return s?.version===1?s:{version:1,paused:false,entries:[]};};
@@ -19,8 +19,9 @@
       }));return states.some(Boolean);
     }
     async function closeOwned(entry) {
-      if(!Number.isInteger(entry.tabId))return true;
-      const tab=await chrome.tabs.get(entry.tabId).catch(()=>null);if(!tab)return true;
+      const cleared=()=>mutate(s=>{const e=s.entries.find(e=>e.id===entry.id);if(e)Object.assign(e,{tabId:null,cleanupPending:false,cleanupExpected:false});});
+      if(!Number.isInteger(entry.tabId)){await cleared();return true;}
+      const tab=await chrome.tabs.get(entry.tabId).catch(()=>null);if(!tab){await cleared();return true;}
       try{const state=await page(entry.tabId);
         if(tab.active){if(state?.ownerToken===entry.ownerToken)await ask(entry.tabId,{action:'captureQueueRelease',ownerToken:entry.ownerToken}).catch(()=>{});return false;}
         if(state?.ownerToken!==entry.ownerToken||state.videoId!==entry.videoId)return false;
@@ -28,7 +29,7 @@
         // Recheck after the storage await: the user may have selected this tab.
         if((await chrome.tabs.get(entry.tabId)).active){await mutate(s=>{const e=s.entries.find(e=>e.id===entry.id);if(e)e.cleanupExpected=false;});return false;}
         await chrome.tabs.remove(entry.tabId);
-        await mutate(s=>{const e=s.entries.find(e=>e.id===entry.id);if(e)Object.assign(e,{tabId:null,cleanupExpected:false,cleanupPending:false});});return true;
+        await cleared();return true;
       }catch{return false;}
     }
     async function schedule() {
@@ -51,7 +52,7 @@
         old.tracks.source=structuredClone(result.track);old.pendingRequest=null;if(old.bridge)old.bridge.suspended=true;
         old.netflixCapture={kind:'ottspeed.netflix-capture',schemaVersion:1,mediaKey:media.key,media,track:structuredClone(result.track),rawText:result.rawText};
         const latest=await read(),pending=latest.entries.find(e=>e.id===entry.id);if(latest.paused||!pending||terminal.has(pending.status))return false;
-        try{await library.put(old);return true;}catch(error){if(error.name!=='ConflictError'||attempt===2)throw error;}
+        try{await library.put(old);try{await onSaved();}catch{}return true;}catch(error){if(error.name!=='ConflictError'||attempt===2)throw error;}
       }
     }
     async function step() {

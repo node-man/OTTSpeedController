@@ -16,6 +16,7 @@ export const extensionAssets = Object.freeze([
   "modules/translation/background.js",
   "modules/runtime/background.js",
   "modules/runtime/bridge-http.js",
+  "modules/library/mcp-registration.js",
   "subtitles/core.js",
   "subtitles/controller.js",
   "subtitles/library.js",

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeEnvironment } from './dom.mjs';
+import core from '../../subtitles/core.js';
+import {collected} from '../fixtures/collected.mjs';
 
 const media = { key: 'netflix:synthetic-episode-one', platform: 'netflix', videoId: 'synthetic-episode-one' };
 const sourceText = 'An original synthetic sentence.';
@@ -86,6 +88,22 @@ test('partial B keeps fixed times, falls back to English beyond readiness, and c
   f.controller.loadSession(session);
   assert.equal(f.controller.getState().targetText,'합성 완성 번역. 두 번째.');assert.equal(f.controller.getState().warningCode,null);
   assert.equal(f.controller.getState().sourceText,'');f.controller.destroy();
+});
+
+test('validated partial readiness uses the B time axis, while fallback uses the independent source sync',async()=>{
+  for(const timing of [
+    {offsetMs:-1000,scale:1,b:{offsetMs:0,scale:1},source:{offsetMs:0,scale:1},time:3.5},
+    {offsetMs:500,scale:1.5,b:{offsetMs:-250,scale:1.2},source:{offsetMs:50,scale:1.1},time:8},
+    {offsetMs:0,scale:1,b:{offsetMs:-1000,scale:1},source:{offsetMs:-500,scale:1},time:3.75},
+  ]){
+    const f=await fixture(),input=collected(),request=await core.makeTranslationRequest({...input,reference:null,mode:'translate'});
+    const validated=core.validateTranslationProgress({kind:'ottspeed.translation-progress',schemaVersion:1,revision:1,requestId:request.requestId,sourceHash:request.sourceHash,mediaKey:request.mediaKey,cues:[{id:'one',text:'검증된 앞부분.'}]},request);
+    const session={mediaKey:input.media.key,tracks:{source:{...input.source,sync:timing.source},b:{...input.source,...validated,requestId:request.requestId,partial:true,sync:timing.b}},settings:{enabled:true,display:'target',activeTarget:'b',offsetMs:timing.offsetMs,scale:timing.scale}};
+    f.controller.setMedia(input.media);f.controller.loadSession(session);
+    const boundary=validated.readyThroughMs*timing.scale*timing.b.scale+timing.offsetMs+timing.b.offsetMs;
+    f.seek((boundary-1)/1000);assert.equal(f.controller.getState().sourceText,'');
+    f.seek(timing.time);assert.equal(f.controller.getState().targetText,'');assert.equal(f.controller.getState().sourceText,input.source.cues[1].text);assert.equal(f.controller.getState().warningCode,'TRANSLATION_PENDING');f.controller.destroy();
+  }
 });
 
 test('per-track timing aligns an existing Korean track without shifting the English source', async () => {

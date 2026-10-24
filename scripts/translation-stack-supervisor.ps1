@@ -5,8 +5,7 @@ $dataDirectory = Join-Path $projectDirectory 'private-subtitles/bridge'
 $statePath = Join-Path $dataDirectory 'stack-status.json'
 $logPath = Join-Path $dataDirectory 'stack-supervisor.jsonl'
 $healthFile = Join-Path $env:USERPROFILE '.local/state/tunnel-client/health/ottspeed.url'
-$profilePath = Join-Path $dataDirectory 'tunnel-profiles/ottspeed.yaml'
-. (Join-Path $PSScriptRoot 'runtime/config.ps1')
+. (Join-Path $PSScriptRoot 'runtime/health.ps1')
 $expectedTunnel = (Get-OTTDeckRuntimeConfiguration -ProjectDirectory $projectDirectory).TunnelId
 $powershellExecutable = Join-Path $PSHOME 'powershell.exe'
 $mutex = New-Object Threading.Mutex($false, 'Local\OTTSpeed-Translation-Stack')
@@ -35,15 +34,7 @@ function Start-StackHelper([string]$scriptName, [string]$extraArguments = '') {
   if (-not $helper.WaitForExit(60000)) { Write-StackEvent 'helper_timeout'; return }
 }
 function Test-Tunnel {
-  try {
-    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
-    if ($profile.control_plane.tunnel_id -ne $expectedTunnel) { return $false }
-    $baseUrl = (Get-Content -LiteralPath $healthFile -Raw).Trim()
-    if ($baseUrl -notmatch '^http://127\.0\.0\.1:\d+$') { return $false }
-    $live = Invoke-WebRequest -UseBasicParsing -Uri ($baseUrl + '/healthz') -TimeoutSec 3
-    $ready = Invoke-WebRequest -UseBasicParsing -Uri ($baseUrl + '/readyz') -TimeoutSec 3
-    return ($live.StatusCode -eq 200 -and $ready.StatusCode -eq 200)
-  } catch { return $false }
+  return Test-OTTDeckTunnel -ProjectDirectory $projectDirectory -ExpectedTunnel $expectedTunnel -HealthFile $healthFile
 }
 try {
   Write-StackEvent 'supervisor_started'
@@ -55,13 +46,11 @@ try {
       $bridgeReady = Test-Bridge
       if ($bridgeReady) { Write-StackEvent 'bridge_started' } else { Write-StackEvent 'bridge_start_failed' }
     }
-    $tunnelReady = Test-Tunnel
-    if ($bridgeReady -and -not $tunnelReady -and [DateTime]::UtcNow -ge $nextTunnelAttempt) {
-      # Existing user-approved DPAPI credential; no new credentials or access.
-      Start-StackHelper 'connect-translation-tunnel.ps1' '-UseSavedKey'
-      $tunnelReady = Test-Tunnel
+    $check = Invoke-OTTDeckTunnelCheck -Test { Test-Tunnel } -Reconnect { Start-StackHelper 'connect-translation-tunnel.ps1' '-UseSavedKey' } -BridgeReady $bridgeReady -NextAttempt $nextTunnelAttempt
+    $tunnelReady = $check.Ready
+    $nextTunnelAttempt = $check.NextAttempt
+    if ($check.Attempted) {
       if ($tunnelReady) { Write-StackEvent 'tunnel_started' } else { Write-StackEvent 'tunnel_start_failed' }
-      $nextTunnelAttempt = [DateTime]::UtcNow.AddMinutes(5)
     }
     $state = [ordered]@{
       checkedAt=[DateTime]::UtcNow.ToString('o'); supervisorPid=$PID

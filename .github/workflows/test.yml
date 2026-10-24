@@ -16,6 +16,9 @@ jobs:
       - name: Compile and test the synthetic native host
         shell: powershell
         run: powershell.exe -NoProfile -File tests/native-host.test.ps1
+      - name: Test JSON and YAML tunnel health without reconnecting
+        shell: powershell
+        run: powershell.exe -NoProfile -File tests/runtime-health.test.ps1
   test:
     runs-on: ubuntu-latest
     steps:

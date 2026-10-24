@@ -39,6 +39,7 @@
     return out;
   }
   const signature=t=>({language:t.language||'',cues:t.cues.map(c=>({id:c.id,startMs:c.startMs,endMs:c.endMs,text:c.text})),requestId:t.requestId||null,provenance:t.provenance||null,resourceSha256:t.capture?.resourceSha256||null});
+  const sourceFingerprint=t=>hash({...signature(t),capture:cleanCapture(t.capture)||null});
   async function asset(role,input,request=null,extra={}) {
     const normalized=track(input),digest=await hash(signature(normalized));
     return {assetId:`${role}:${digest}`,role,hash:digest,track:normalized,request:request?.requestId===normalized.requestId?clone(request):null,...extra};
@@ -111,11 +112,14 @@
     for(const item of all)item.inspection=await inspection(item,session);
     const target=b.find(a=>!a.track.partial&&a.inspection.sourceMatches===true)||b.find(a=>a.current)||b.find(a=>!a.track.partial)||b[0];
     const inspectionState=target?.inspection.state||'번역 연결 없음';
-    const state=!session.tracks?.source?'원문 없음':!target?'번역 대기':inspectionState==='연결 검사 실패'?'검사 필요':target.inspection.sourceMatches===false?'원문 변경':target.track.partial?'일부 번역':'B 보관';
+    const saved=session.mcpRegistration,registration=saved?.sourceFingerprint===await (session.tracks?.source?sourceFingerprint(session.tracks.source):null)?saved:null;
+    const mcpState=!registration?'등록 확인 전':registration.status==='failed'?'등록 실패':'등록됨';
+    const pendingState=!registration?'원문 보관 · 등록 전':registration.status==='failed'?'MCP 등록 실패':registration.status==='complete'?'번역 완료 · 수신 대기':registration.savedChunkCount?'번역 중':'번역 대기';
+    const state=!session.tracks?.source?'원문 없음':!target?pendingState:inspectionState==='연결 검사 실패'?'검사 필요':target.inspection.sourceMatches===false?'원문 변경':target.track.partial?'번역 중':target.inspection.sourceMatches===true?'완료':'B 보관';
     return {mediaKey:session.mediaKey,media:session.media,catalog:metadata(session.catalog),assets:all,state,updatedAt:session.updatedAt||null,
-      inspectionState,
+      inspectionState,mcpState,mcpJobId:registration?.jobId||null,
       sourceCount:all.filter(a=>a.role==='source').length,aCount:all.filter(a=>a.role==='a').length,bCount:b.length,
-      readyCueCount:target?.track.cues.length||0,totalCueCount:target?.track.totalCueCount||target?.track.cues.length||0,readyThroughMs:target?.track.readyThroughMs||0};
+      readyCueCount:target?.track.cues.length||registration?.readyCueCount||0,totalCueCount:target?.track.totalCueCount||target?.track.cues.length||registration?.cueCount||0,readyThroughMs:target?.track.readyThroughMs||registration?.readyThroughMs||0};
   }
   function matches(row,{query='',season='',state=''}={}) {
     const m=row.catalog,episode=m.season&&m.episode?`S${String(m.season).padStart(2,'0')}E${String(m.episode).padStart(2,'0')}`:'';
@@ -195,5 +199,5 @@
     }
     return {session,changed:false};
   }
-  return Object.freeze({metadata,track,asset,assets,prepareWrite,summarize,matches,connection,inspection,cleanSession,createBackup,readBackup,hash,mergeArchive,selectReadyTranslation,limits:{maxBackupBytes:MAX_BACKUP}});
+  return Object.freeze({metadata,track,asset,assets,prepareWrite,summarize,matches,connection,inspection,cleanSession,createBackup,readBackup,hash,sourceFingerprint,mergeArchive,selectReadyTranslation,limits:{maxBackupBytes:MAX_BACKUP}});
 });

@@ -12,6 +12,7 @@ importScripts(
   "../subtitles/translation-worker.js",
   "../subtitles/collection-queue.js",
   "../subtitles/runtime-client.js",
+  "../modules/library/mcp-registration.js",
   "../modules/app/senders.js",
   "../modules/app/message-router.js",
   "../modules/runtime/background.js",

@@ -444,7 +444,9 @@
         }), key === 'source' && this._media?.platform === 'netflix' && this._tracks[key].capture?.format === 'vtt');
       };
       const target = this._settings.display !== 'source' ? activeText(this._settings.activeTarget) : '';
-      const awaitingTranslation = this._settings.activeTarget === 'b' && this._tracks.b?.partial && this._tracks.b.cues.length < this._tracks.b.totalCueCount && milliseconds >= this._tracks.b.readyThroughMs;
+      const bSync = this._tracks.b?.sync;
+      const bTime = bSync ? (milliseconds - this._settings.offsetMs - bSync.offsetMs) / (this._settings.scale * bSync.scale) : milliseconds;
+      const awaitingTranslation = this._settings.activeTarget === 'b' && this._tracks.b?.partial && this._tracks.b.cues.length < this._tracks.b.totalCueCount && bTime >= this._tracks.b.readyThroughMs;
       const source = this._settings.display !== 'target' || awaitingTranslation ? activeText('source') : '';
       if(awaitingTranslation) {this._warningCode='TRANSLATION_PENDING';this._warning='다음 구간 번역 중입니다. 준비된 구간 뒤에서는 영어 원문을 표시합니다.';}
       this._sourceText = source;

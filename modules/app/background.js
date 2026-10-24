@@ -16,7 +16,19 @@
       core: OTTSubtitles,
       validation: OTTCaptureValidation,
       library: OTTSubtitleLibrary,
+      onSaved: () => registration.sync({force:true}),
     });
+    const registration = OTTDeckMcpRegistration({
+      core: OTTSubtitles, catalog: OTTSubtitleCatalog, validation: OTTCaptureValidation,
+      library: OTTSubtitleLibrary,
+      bridge: async (path, body) => {
+        const token = (await chrome.storage.local.get('ottspeedBridge')).ottspeedBridge?.token;
+        if (!token) throw new Error('브리지 연결 후 MCP 자동 등록을 재시도합니다.');
+        return OTTDeckBridgeHttp()('/extension' + path, {token, body});
+      },
+      watch: job => translation.watch(null, job.jobId, job.mediaKey, {selectResults:false}),
+    });
+    const registrationAlarm = 'ottdeck-library-registration';
     OTTDeckRuntimeBackground({ runtime, router, senders });
     OTTDeckTranslationBackground({ worker: translation, router, senders });
     OTTDeckCaptureBackground({ queue: collection, router, senders });
@@ -32,7 +44,10 @@
     chrome.runtime.onMessage.addListener(router.dispatch);
     void translation.initialize().catch(() => {});
     void collection.initialize().catch(() => {});
+    void registration.sync().catch(() => {});
+    void chrome.alarms.create(registrationAlarm, {periodInMinutes:1});
     chrome.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === registrationAlarm) void registration.sync().catch(() => {});
       if (alarm.name === translation.alarm)
         void translation.poll().catch(() => {});
       if (alarm.name === collection.alarm)

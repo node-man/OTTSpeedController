@@ -6,7 +6,7 @@ import { makeEnvironment } from './dom.mjs';
 
 const popupScript = await readFile(new URL('../../popup/popup.js', import.meta.url), 'utf8');
 const backgroundScript = await readFile(new URL('../../scripts/background.js', import.meta.url), 'utf8');
-const backgroundModules = new Map(await Promise.all(["shared/product.js","modules/app/senders.js","modules/app/message-router.js","modules/runtime/background.js","modules/translation/background.js","modules/capture/background.js","modules/playback/background.js","modules/app/background.js"].map(async path=>[path,await readFile(new URL('../../'+path,import.meta.url),'utf8')])));
+const backgroundModules = new Map(await Promise.all(["shared/product.js","modules/app/senders.js","modules/app/message-router.js","modules/runtime/background.js","modules/translation/background.js","modules/capture/background.js","modules/playback/background.js","modules/app/background.js","modules/library/mcp-registration.js"].map(async path=>[path,await readFile(new URL('../../'+path,import.meta.url),'utf8')])));
 const sharedTransport=await readFile(new URL('../../modules/runtime/bridge-http.js',import.meta.url),'utf8');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 function event() {
@@ -129,7 +129,7 @@ function background({ storedSession = null, liveState = { hasVideo: true, isPlay
   const actionCalls = []; const queried = []; const stored = {}; const libraryKeys = [];const collections=[],runtimeCalls=[];
   const chrome = {
     runtime: { id: 'synthetic-extension', onMessage: event(), onInstalled: event(),onStartup:event(),getURL:path=>`chrome-extension://synthetic/${path}` },
-    alarms:{onAlarm:event()},
+    alarms:{onAlarm:event(),create:async()=>{}},
     action: Object.fromEntries(['setIcon', 'setBadgeText', 'setTitle'].map(name => [name, async value => actionCalls.push({ name, value })])),
     tabs: {
       onRemoved: event(), onUpdated: event(), onActivated: event(),
@@ -138,7 +138,7 @@ function background({ storedSession = null, liveState = { hasVideo: true, isPlay
     storage: { local: { set: async value => Object.assign(stored, value) } }
   };
   const context = vm.createContext({
-    chrome, importScripts(...paths) {for(const path of paths){const code=backgroundModules.get(path.replace('../',''));if(code)vm.runInContext(code,context,{filename:path});}}, OTTSubtitles:{},OTTBridgeClient:{},OTTCaptureValidation:{},
+    chrome, importScripts(...paths) {for(const path of paths){const code=backgroundModules.get(path.replace('../',''));if(code)vm.runInContext(code,context,{filename:path});}}, OTTSubtitles:{},OTTSubtitleCatalog:{},OTTBridgeClient:{},OTTCaptureValidation:{},
     OTTLocalRuntime:()=>({ensure:async()=>{runtimeCalls.push('ensure');return {ready:true};},status:async()=>{runtimeCalls.push('status');return {ready:false};}}),
     OTTCollectionQueue:()=>({initialize:async()=>{},tick:async()=>{},removed:async()=>{},status:async()=>({version:1,entries:[]}),...Object.fromEntries(['enqueue','pause','resume','cancel'].map(name=>[name,async value=>{collections.push({name,value});return {version:1,entries:[]};}]))}),
     OTTTranslationWorker:()=>({initialize:async()=>{},observe:async()=>{},removed:async()=>{},prepareSource:async tabId=>({tabId}),watch:async tabId=>({tabId}),status:async()=>null,refreshStored:async()=>({saved:true}),poll:async()=>{}}),

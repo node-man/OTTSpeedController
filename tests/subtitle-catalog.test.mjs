@@ -43,7 +43,7 @@ test('portable backup validates all payload hashes, identities and requests and 
 
 test('metadata filtering is explicit, supports unknown episodes, and rejects impossible season data',async()=>{
  const value=session();value.catalog={title:'합성 작품',season:2,episode:3};const row=await catalog.summarize(value);
- assert(catalog.matches(row,{query:'합성',season:'2',state:'번역 대기'}));assert(!catalog.matches(row,{season:'1'}));
+ assert(catalog.matches(row,{query:'합성',season:'2',state:'원문 보관 · 등록 전'}));assert(!catalog.matches(row,{season:'1'}));
  assert(catalog.matches(row,{query:'S02E03'}));assert(catalog.matches(row,{query:' s02e03 '}));assert(!catalog.matches(row,{query:'S02E04'}));
  assert.deepEqual(catalog.metadata(null),{title:'',season:null,episode:null});assert.throws(()=>catalog.metadata({season:-1}),/정수/);
  assert.throws(()=>catalog.metadata({episode:1.5}),/정수/);
@@ -52,7 +52,7 @@ test('metadata filtering is explicit, supports unknown episodes, and rejects imp
 test('inspection distinguishes a valid old-source translation from the current original and detects changed request hashes',async()=>{
  const value=session(),request=await core.makeTranslationRequest({media,source:value.tracks.source});
  value.pendingRequest=request;value.tracks.b={...track('원문에 연결한 합성 번역.','ko'),requestId:request.requestId};
- let row=await catalog.summarize(value);assert.equal(row.inspectionState,'현재 원문·요청·시각 일치');assert.equal(row.state,'B 보관');
+ let row=await catalog.summarize(value);assert.equal(row.inspectionState,'현재 원문·요청·시각 일치');assert.equal(row.state,'완료');
  value.tracks.source=track('A newer synthetic original with unchanged cue IDs and times.');
  row=await catalog.summarize(value);assert.equal(row.inspectionState,'다른 원문 버전의 번역');assert.equal(row.state,'원문 변경');
  assert.equal(row.assets.find(a=>a.role==='b').inspection.requestHashVerified,true);

@@ -4,6 +4,8 @@
   const $=id=>document.getElementById(id),catalog=OTTSubtitleCatalog,library=OTTSubtitleLibrary;
   const selected=new Set(),cache=new Map(),executionIntents=new Map();let rows=[],chosenKey=null,chosenAsset=null,busy=false,bridgeToken=null,batch=null,batchChoices=[],metadataDirty=false,executionReady=false,refreshing=false,archiveSyncing=false;
   const bridgeHttp=OTTDeckBridgeHttp({timeoutMs:20000,offlineMessage:'로컬 브리지에 연결하지 못했습니다. 저장된 자막은 계속 관리할 수 있습니다.'});
+  const registration=OTTDeckMcpRegistration({core:OTTSubtitles,catalog,validation:OTTCaptureValidation,library,bridge,
+    watch:async job=>{const reply=await chrome.runtime.sendMessage({action:'watchLibraryTranslation',jobId:job.jobId,mediaKey:job.mediaKey,selectResults:false});if(reply?.error)throw new Error(reply.error);}});
   const hasExecution=()=>batch?.execution?.mode==='workspace-agent';
   const stamp=ms=>{const n=Math.max(0,Math.floor(ms||0));return `${String(Math.floor(n/3600000)).padStart(2,'0')}:${String(Math.floor(n/60000)%60).padStart(2,'0')}:${String(Math.floor(n/1000)%60).padStart(2,'0')}.${String(n%1000).padStart(3,'0')}`;};
   const notice=(text,error=false)=>{$('notice').textContent=text;$('notice').classList.toggle('error',error);};
@@ -45,9 +47,10 @@
       check.addEventListener('change',()=>{if(check.checked)selected.add(row.mediaKey);else selected.delete(row.mediaKey);controls();});
       const name=append(tr,'td',title(row));append(name,'small',episode(row));if(row.catalog.episodeTitle)append(name,'small',row.catalog.episodeTitle);append(name,'small',row.mediaKey);
       append(tr,'td',`${row.sourceCount}개 버전`);append(tr,'td',`A ${row.aCount} / B ${row.bCount}`);
-      const state=append(tr,'td',row.state==='B 보관'&&row.inspectionState==='현재 원문·요청·시각 일치'?'B 보관 · 전편 번역':row.state);if(row.readyCueCount)append(state,'small',`${row.readyCueCount}/${row.totalCueCount}개${row.readyThroughMs?' · '+stamp(row.readyThroughMs)+'까지':''}`);
+      const state=append(tr,'td',row.state);if(row.readyCueCount)append(state,'small',`${row.readyCueCount}/${row.totalCueCount}개${row.readyThroughMs?' · '+stamp(row.readyThroughMs)+'까지':''}`);
       append(tr,'td',row.inspectionState);
       const open=append(append(tr,'td'),'button','열기','quiet');open.addEventListener('click',()=>{chosenKey=row.mediaKey;metadataDirty=false;chosenAsset=null;renderDetail();});
+      const registered=append(tr,'td',row.mcpState);if(row.mcpJobId)append(registered,'small',row.mcpJobId);
     }controls();
   }
   function renderDetail() {
@@ -115,7 +118,7 @@
           catch(error){if(error.name!=='ConflictError'||attempt===2)throw error;}
         }
       }
-      if(imported||activated)await refresh();return imported;
+      await registration.sync();await refresh();return imported;
     }finally{archiveSyncing=false;}
   }
   async function readBatch(id){const value=await bridge(`/batches/${id}`);if(value.execution||value.status==='complete')executionIntents.delete(id);else if(executionIntents.has(id))value.execution=executionIntents.get(id);return value;}
@@ -170,7 +173,8 @@
     if(sessions.length>1&&sessions.some(s=>!s.catalog?.season||!s.catalog?.episode))throw new Error('여러 회차를 순서대로 준비하려면 시즌·회차 정보가 필요합니다. 원문과 기존 자막은 그대로 보관됩니다.');
     sessions.sort((a,b)=>(a.catalog?.season||0)-(b.catalog?.season||0)||(a.catalog?.episode||0)-(b.catalog?.episode||0)||a.mediaKey.localeCompare(b.mediaKey));
     await pair();const jobIds=[];
-    for(const session of sessions){const job=await bridge('/jobs',{media:session.media,source:session.tracks.source});jobIds.push(job.jobId);const reply=await chrome.runtime.sendMessage({action:'watchLibraryTranslation',jobId:job.jobId,mediaKey:session.mediaKey});if(reply?.error)throw new Error(reply.error);}
+    await registration.sync({force:true});
+    for(const session of sessions){const latest=await library.get(session.mediaKey),linked=latest?.mcpRegistration;if(!linked?.jobId||linked.sourceFingerprint!==await catalog.sourceFingerprint(latest.tracks.source))throw new Error('선택 회차의 MCP 등록을 먼저 확인하세요.');jobIds.push(linked.jobId);const reply=await chrome.runtime.sendMessage({action:'watchLibraryTranslation',jobId:linked.jobId,mediaKey:session.mediaKey,selectResults:false});if(reply?.error)throw new Error(reply.error);}
     const prepared=await bridge('/batches',{jobIds});batch=await readBatch(prepared.batchId);await chrome.storage.local.set({ottspeedLibrary:{lastBatchId:batch.batchId}});renderBatch();notice('선택 회차의 고정 작업 묶음을 준비했습니다. 원문과 A는 보존됩니다.');
   }));
   $('batch-copy').addEventListener('click',()=>void run(async()=>{

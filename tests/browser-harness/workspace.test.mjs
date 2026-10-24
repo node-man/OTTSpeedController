@@ -29,14 +29,7 @@ function file(name, text, read) {
   const buffer = new TextEncoder().encode(text).buffer;
   return { name, size: buffer.byteLength, arrayBuffer: read || (async () => buffer) };
 }
-const turn = () => new Promise(resolve => setImmediate(resolve));
-async function until(predicate, label) {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    if (await predicate()) return;
-    await turn();
-  }
-  throw new Error(`Workspace boundary did not settle: ${label}`);
-}
+import {until} from './wait.mjs';
 
 async function workspace({ saved = sessionFor(), store = new Map(), stateMedia = media(101), initialFailApply = 0, waitUntilReady = true, search='?tabId=5', configure } = {}) {
   const env = await makeEnvironment();
